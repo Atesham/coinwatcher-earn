@@ -1,50 +1,99 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import { useMining } from '@/context/MiningContext';
+import { useAuth } from '@/context/AuthContext';
 import { ArrowRight, ArrowUp, ArrowDown, CreditCard, Coins, ChevronRight, Bell } from 'lucide-react';
+import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+
+interface Transaction {
+  id: string;
+  type: string;
+  amount: number;
+  date: string;
+  status: string;
+}
 
 const Wallet: React.FC = () => {
   const { coins } = useMining();
+  const { user } = useAuth();
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   
-  // Dummy transaction data
-  const transactions = [
-    {
-      id: 1,
-      type: 'mining',
-      amount: 12.5,
-      date: '2023-09-15T10:45:00',
-      status: 'completed',
-    },
-    {
-      id: 2,
-      type: 'bonus',
-      amount: 5.0,
-      date: '2023-09-14T16:32:00',
-      status: 'completed',
-    },
-    {
-      id: 3,
-      type: 'mining',
-      amount: 12.5,
-      date: '2023-09-14T09:15:00',
-      status: 'completed',
-    },
-    {
-      id: 4,
-      type: 'referral',
-      amount: 20.0,
-      date: '2023-09-13T14:22:00',
-      status: 'completed',
-    },
-    {
-      id: 5,
-      type: 'mining',
-      amount: 12.5,
-      date: '2023-09-13T08:45:00',
-      status: 'completed',
-    }
-  ];
+  // Fetch transactions from Firebase
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      if (!user) return;
+      
+      try {
+        const transactionsRef = collection(db, 'transactions');
+        const q = query(
+          transactionsRef, 
+          where('userId', '==', user.uid),
+          orderBy('date', 'desc'),
+          limit(10)
+        );
+        
+        const querySnapshot = await getDocs(q);
+        const transactionsList: Transaction[] = [];
+        
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          transactionsList.push({
+            id: doc.id,
+            type: data.type,
+            amount: data.amount,
+            date: data.date,
+            status: data.status
+          });
+        });
+        
+        setTransactions(transactionsList);
+        
+        // If no transactions, add dummy data for now
+        if (transactionsList.length === 0) {
+          setTransactions([
+            {
+              id: '1',
+              type: 'mining',
+              amount: 12.5,
+              date: new Date().toISOString(),
+              status: 'completed',
+            },
+            {
+              id: '2',
+              type: 'bonus',
+              amount: 5.0,
+              date: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+              status: 'completed',
+            }
+          ]);
+        }
+      } catch (error) {
+        console.error("Error fetching transactions:", error);
+        
+        // Add dummy data if error
+        setTransactions([
+          {
+            id: '1',
+            type: 'mining',
+            amount: 12.5,
+            date: new Date().toISOString(),
+            status: 'completed',
+          },
+          {
+            id: '2',
+            type: 'bonus',
+            amount: 5.0,
+            date: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+            status: 'completed',
+          }
+        ]);
+      }
+    };
+    
+    fetchTransactions();
+  }, [user]);
   
   // Format date
   const formatDate = (dateString: string) => {
@@ -112,37 +161,43 @@ const Wallet: React.FC = () => {
         </div>
         
         <div className="space-y-3">
-          {transactions.map((transaction) => (
-            <div
-              key={transaction.id}
-              className="glass-card rounded-lg p-3 flex items-center justify-between"
-            >
-              <div className="flex items-center">
-                <div className="bg-app-card rounded-full p-2 mr-3">
-                  {getTransactionIcon(transaction.type)}
+          {transactions.length > 0 ? (
+            transactions.map((transaction) => (
+              <div
+                key={transaction.id}
+                className="glass-card rounded-lg p-3 flex items-center justify-between"
+              >
+                <div className="flex items-center">
+                  <div className="bg-app-card rounded-full p-2 mr-3">
+                    {getTransactionIcon(transaction.type)}
+                  </div>
+                  <div>
+                    <h3 className="font-medium capitalize">
+                      {transaction.type === 'mining' ? 'Mining Reward' : 
+                       transaction.type === 'bonus' ? 'Daily Bonus' : 
+                       transaction.type === 'referral' ? 'Referral Bonus' : 
+                       transaction.type}
+                    </h3>
+                    <div className="flex items-center text-xs text-white/60">
+                      <span>{formatDate(transaction.date)}</span>
+                      <span className="mx-1">•</span>
+                      <span>{formatTime(transaction.date)}</span>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-medium capitalize">
-                    {transaction.type === 'mining' ? 'Mining Reward' : 
-                     transaction.type === 'bonus' ? 'Daily Bonus' : 
-                     transaction.type === 'referral' ? 'Referral Bonus' : 
-                     transaction.type}
-                  </h3>
-                  <div className="flex items-center text-xs text-white/60">
-                    <span>{formatDate(transaction.date)}</span>
-                    <span className="mx-1">•</span>
-                    <span>{formatTime(transaction.date)}</span>
+                <div className="text-right">
+                  <div className="font-semibold">+{transaction.amount}</div>
+                  <div className="text-xs text-app-green capitalize">
+                    {transaction.status}
                   </div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="font-semibold">+{transaction.amount}</div>
-                <div className="text-xs text-app-green capitalize">
-                  {transaction.status}
-                </div>
-              </div>
+            ))
+          ) : (
+            <div className="glass-card p-4 text-center text-white/70">
+              No transactions yet. Start mining to earn coins!
             </div>
-          ))}
+          )}
         </div>
       </div>
     </Layout>

@@ -1,185 +1,197 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { toast } from '@/components/ui/use-toast';
+import { useAuth } from './AuthContext';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useToast } from '@/components/ui/use-toast';
 
-interface MiningContextType {
+interface MiningContextProps {
   coins: number;
-  miningRate: number; // coins per mining session
-  miningActive: boolean;
-  miningComplete: boolean;
-  nextMiningTime: Date | null;
-  progress: number; // 0-100 for the mining circle
-  adsWatched: number;
-  totalAdsRequired: number;
-  watchAd: () => void;
+  miningRate: number;
+  isMining: boolean;
+  canMine: boolean;
+  lastMined: Date | null;
+  nextMineTime: Date | null;
+  watchedAds: number;
   startMining: () => void;
-  collectMining: () => void;
-  timeRemaining: number; // in seconds
+  stopMining: () => void;
+  watchAd: () => void;
 }
 
-const MiningContext = createContext<MiningContextType | undefined>(undefined);
+const MiningContext = createContext<MiningContextProps | undefined>(undefined);
 
-export function MiningProvider({ children }: { children: React.ReactNode }) {
-  const [coins, setCoins] = useState<number>(() => {
-    const saved = localStorage.getItem('coins');
-    return saved ? parseFloat(saved) : 0;
-  });
-  const [miningRate] = useState<number>(12.5); // coins per mining session
-  const [miningActive, setMiningActive] = useState<boolean>(false);
-  const [miningComplete, setMiningComplete] = useState<boolean>(false);
-  const [nextMiningTime, setNextMiningTime] = useState<Date | null>(() => {
-    const saved = localStorage.getItem('nextMiningTime');
-    return saved ? new Date(saved) : null;
-  });
-  const [progress, setProgress] = useState<number>(0);
-  const [adsWatched, setAdsWatched] = useState<number>(() => {
-    const saved = localStorage.getItem('adsWatched');
-    return saved ? parseInt(saved) : 0;
-  });
-  const [timeRemaining, setTimeRemaining] = useState<number>(0);
-  const totalAdsRequired = 2;
+export const MiningProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, userData, updateUserData } = useAuth();
+  const [coins, setCoins] = useState(0);
+  const [miningRate, setMiningRate] = useState(5);
+  const [isMining, setIsMining] = useState(false);
+  const [watchedAds, setWatchedAds] = useState(0);
+  const [lastMined, setLastMined] = useState<Date | null>(null);
+  const [nextMineTime, setNextMineTime] = useState<Date | null>(null);
+  const [canMine, setCanMine] = useState(false);
+  const { toast } = useToast();
 
-  // Check if mining is complete based on stored timestamp
+  // Initialize mining state from user data
   useEffect(() => {
-    if (nextMiningTime) {
-      const now = new Date();
-      if (now >= nextMiningTime) {
-        setMiningComplete(true);
+    if (userData) {
+      setCoins(userData.coins || 0);
+      setMiningRate(userData.miningRate || 5);
+      
+      if (userData.lastMined) {
+        const lastMinedDate = new Date(userData.lastMined);
+        setLastMined(lastMinedDate);
+        
+        // Calculate next mining time (12 hours after last mining)
+        const nextTime = new Date(lastMinedDate);
+        nextTime.setHours(nextTime.getHours() + 12);
+        setNextMineTime(nextTime);
+        
+        // Check if can mine
+        const now = new Date();
+        setCanMine(now >= nextTime);
       } else {
-        // Calculate time remaining and start countdown
-        const diff = Math.floor((nextMiningTime.getTime() - now.getTime()) / 1000);
-        setTimeRemaining(diff > 0 ? diff : 0);
+        // If never mined before, can mine immediately
+        setCanMine(true);
+        setNextMineTime(null);
       }
     }
-  }, [nextMiningTime]);
+  }, [userData]);
 
-  // Update countdown timer
+  // Update Firebase when coins change
   useEffect(() => {
-    let timer: NodeJS.Timeout | null = null;
-    
-    if (miningActive && timeRemaining > 0) {
-      timer = setInterval(() => {
-        setTimeRemaining((prev) => {
-          const newTime = prev - 1;
-          
-          // Calculate progress percentage (reversed: 0% at start, 100% when done)
-          const totalSeconds = 12 * 60 * 60; // 12 hours in seconds
-          const elapsed = totalSeconds - newTime;
-          const newProgress = Math.min(100, (elapsed / totalSeconds) * 100);
-          setProgress(newProgress);
-          
-          if (newTime <= 0) {
-            setMiningComplete(true);
-            setMiningActive(true);
-            clearInterval(timer as NodeJS.Timeout);
-            
-            // Show notification
-            toast({
-              title: "Mining Complete!",
-              description: "Your coins are ready to collect!",
-              duration: 5000,
-            });
-            
-            return 0;
-          }
-          return newTime;
-        });
-      }, 1000);
-    }
-    
-    return () => {
-      if (timer) clearInterval(timer);
+    const updateCoins = async () => {
+      if (user && userData && userData.coins !== coins) {
+        try {
+          await updateUserData({ coins });
+        } catch (error) {
+          console.error("Error updating coins in Firebase:", error);
+        }
+      }
     };
-  }, [miningActive, timeRemaining]);
 
-  // Save state to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('coins', coins.toString());
-    if (nextMiningTime) {
-      localStorage.setItem('nextMiningTime', nextMiningTime.toISOString());
-    }
-    localStorage.setItem('adsWatched', adsWatched.toString());
-  }, [coins, nextMiningTime, adsWatched]);
+    updateCoins();
+  }, [coins, user, userData]);
 
+  // Watch ad functionality
   const watchAd = () => {
-    // Simulate watching an ad
-    setTimeout(() => {
-      setAdsWatched(prev => {
-        const newCount = prev + 1;
+    // In a real app, this would show an actual ad
+    // For now, we'll just simulate watching an ad
+    setWatchedAds((prev) => {
+      const newCount = prev + 1;
+      
+      if (newCount >= 2) {
+        setCanMine(true);
         toast({
-          title: "Ad Watched!",
-          description: `${newCount}/${totalAdsRequired} ads completed`,
-          duration: 3000,
+          title: "Mining Unlocked!",
+          description: "You can now start mining coins.",
         });
-        return newCount;
-      });
-    }, 3000);
-  };
-
-  const startMining = () => {
-    // Reset ads watched
-    setAdsWatched(0);
-    
-    // Set next mining time to 12 hours from now
-    const nextTime = new Date();
-    nextTime.setHours(nextTime.getHours() + 12);
-    setNextMiningTime(nextTime);
-    
-    // Start mining
-    setMiningActive(true);
-    setMiningComplete(false);
-    
-    // Calculate initial time remaining
-    const diff = Math.floor((nextTime.getTime() - new Date().getTime()) / 1000);
-    setTimeRemaining(diff);
-    
-    // Reset progress
-    setProgress(0);
-    
-    toast({
-      title: "Mining Started!",
-      description: "Come back in 12 hours to collect your coins",
-      duration: 3000,
+      } else {
+        toast({
+          title: "Ad Watched",
+          description: `Watch ${2 - newCount} more ad to unlock mining.`,
+        });
+      }
+      
+      return newCount;
     });
   };
 
-  const collectMining = () => {
-    if (miningComplete) {
-      setCoins(prev => prev + miningRate);
-      setMiningActive(false);
-      setMiningComplete(false);
-      setProgress(0);
+  // Start mining
+  const startMining = async () => {
+    if (!canMine) {
+      const timeRemaining = nextMineTime ? nextMineTime.getTime() - new Date().getTime() : 0;
+      if (timeRemaining > 0) {
+        const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
+        const minutesRemaining = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+        
+        toast({
+          title: "Mining not available",
+          description: `You can mine again in ${hoursRemaining}h ${minutesRemaining}m.`,
+          variant: "destructive"
+        });
+        return;
+      }
       
-      toast({
-        title: "Coins Collected!",
-        description: `+${miningRate} coins added to your wallet`,
-        duration: 3000,
-      });
+      if (watchedAds < 2) {
+        toast({
+          title: "Watch Ads First",
+          description: `Watch ${2 - watchedAds} more ads to start mining.`,
+          variant: "destructive"
+        });
+        return;
+      }
     }
+    
+    setIsMining(true);
+    
+    // Simulate mining process
+    setTimeout(async () => {
+      const newCoins = coins + miningRate;
+      setCoins(newCoins);
+      setIsMining(false);
+      setCanMine(false);
+      setWatchedAds(0);
+      
+      const now = new Date();
+      setLastMined(now);
+      
+      const nextTime = new Date(now);
+      nextTime.setHours(nextTime.getHours() + 12);
+      setNextMineTime(nextTime);
+      
+      // Update user data in Firebase
+      if (user) {
+        try {
+          await updateUserData({ 
+            coins: newCoins,
+            lastMined: now.toISOString()
+          });
+          
+          toast({
+            title: "Mining Successful!",
+            description: `You earned ${miningRate} coins. Next mining available in 12 hours.`,
+          });
+        } catch (error) {
+          console.error("Error updating mining data:", error);
+          toast({
+            title: "Error Saving Mining Results",
+            description: "There was an error saving your mining results.",
+            variant: "destructive"
+          });
+        }
+      }
+    }, 3000); // 3 second simulated mining time
   };
 
-  const value = {
-    coins,
-    miningRate,
-    miningActive,
-    miningComplete,
-    nextMiningTime,
-    progress,
-    adsWatched,
-    totalAdsRequired,
-    watchAd,
-    startMining,
-    collectMining,
-    timeRemaining
+  // Stop mining
+  const stopMining = () => {
+    setIsMining(false);
   };
 
-  return <MiningContext.Provider value={value}>{children}</MiningContext.Provider>;
-}
+  return (
+    <MiningContext.Provider
+      value={{
+        coins,
+        miningRate,
+        isMining,
+        canMine,
+        lastMined,
+        nextMineTime,
+        watchedAds,
+        startMining,
+        stopMining,
+        watchAd,
+      }}
+    >
+      {children}
+    </MiningContext.Provider>
+  );
+};
 
-export function useMining() {
+export const useMining = () => {
   const context = useContext(MiningContext);
   if (context === undefined) {
     throw new Error('useMining must be used within a MiningProvider');
   }
   return context;
-}
+};

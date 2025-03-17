@@ -1,16 +1,28 @@
 
 import React from 'react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface UserRanking {
-  id: number;
+  id: string;
   name: string;
-  avatar: string;
+  email: string;
+  avatar?: string;
   rank: number;
   coins: number;
   isCurrentUser?: boolean;
 }
 
 const RankingCard: React.FC<{ user: UserRanking }> = ({ user }) => {
+  // Generate initials for avatar fallback
+  const getInitials = () => {
+    return user.name
+      .split(' ')
+      .map(name => name[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+
   return (
     <div className={`p-3 rounded-lg flex items-center justify-between ${user.isCurrentUser ? 'bg-app-blue/10 border border-app-blue/30' : 'glass-card'}`}>
       <div className="flex items-center">
@@ -18,7 +30,10 @@ const RankingCard: React.FC<{ user: UserRanking }> = ({ user }) => {
           #{user.rank}
         </div>
         <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
-          <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+          <Avatar>
+            <AvatarImage src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`} alt={user.name} />
+            <AvatarFallback className="bg-app-blue/20 text-app-blue">{getInitials()}</AvatarFallback>
+          </Avatar>
         </div>
         <div>
           <div className="font-medium">
