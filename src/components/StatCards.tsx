@@ -1,13 +1,13 @@
 
 import React from 'react';
-import { GameController, Gift, Calendar, Lock } from 'lucide-react';
+import { Gamepad, Gift, Calendar, Lock } from 'lucide-react';
 
 const StatCards: React.FC = () => {
   const stats = [
     {
       id: 1,
       title: 'Daily Game Play',
-      icon: <GameController className="h-6 w-6 text-app-blue" />,
+      icon: <Gamepad className="h-6 w-6 text-app-blue" />,
       timer: '13:11:35',
     },
     {
