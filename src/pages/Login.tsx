@@ -1,4 +1,5 @@
 
+<<<<<<< HEAD
 // import React, { useState } from 'react';
 // import { Link } from 'react-router-dom';
 // import { useAuth } from '@/context/AuthContext';
@@ -212,6 +213,17 @@ import { Mail } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+=======
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Mail, KeyRound } from 'lucide-react';
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+>>>>>>> a77fa27bd1932898ac83a91c422a7cd9ae5d352b
 import {
   Form,
   FormControl,
@@ -225,9 +237,12 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+<<<<<<< HEAD
 import { getAuth, signInWithEmailLink, sendSignInLinkToEmail, signInWithCustomToken } from "firebase/auth";
 import { db } from "@/lib/firebase";  // Ensure Firebase is initialized
 import { doc, setDoc, getDoc } from "firebase/firestore";
+=======
+>>>>>>> a77fa27bd1932898ac83a91c422a7cd9ae5d352b
 
 const emailSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -337,6 +352,22 @@ const Login: React.FC = () => {
     }
 
     setLoading(false);
+    
+    if (result) {
+      setEmail(data.email);
+      setShowOTPInput(true);
+    }
+  };
+
+  const onSubmitOTP = async (data: OTPFormValues) => {
+    setLoading(true);
+    await verifyOTP(email, data.otp, false);
+    setLoading(false);
+  };
+
+  const goBack = () => {
+    setShowOTPInput(false);
+    otpForm.reset();
   };
 
   return (
@@ -397,9 +428,18 @@ const Login: React.FC = () => {
                       <div className="flex justify-center">
                         <InputOTP maxLength={6} {...field}>
                           <InputOTPGroup>
+<<<<<<< HEAD
                             {Array(6).fill(0).map((_, i) => (
                               <InputOTPSlot key={i} index={i} className="bg-app-card border-white/10 text-white" />
                             ))}
+=======
+                            <InputOTPSlot index={0} className="bg-app-card border-white/10 text-white" />
+                            <InputOTPSlot index={1} className="bg-app-card border-white/10 text-white" />
+                            <InputOTPSlot index={2} className="bg-app-card border-white/10 text-white" />
+                            <InputOTPSlot index={3} className="bg-app-card border-white/10 text-white" />
+                            <InputOTPSlot index={4} className="bg-app-card border-white/10 text-white" />
+                            <InputOTPSlot index={5} className="bg-app-card border-white/10 text-white" />
+>>>>>>> a77fa27bd1932898ac83a91c422a7cd9ae5d352b
                           </InputOTPGroup>
                         </InputOTP>
                       </div>
@@ -422,10 +462,14 @@ const Login: React.FC = () => {
                   type="button" 
                   variant="ghost" 
                   className="text-white/70"
+<<<<<<< HEAD
                   onClick={() => {
                     setShowOTPInput(false);
                     otpForm.reset();
                   }}
+=======
+                  onClick={goBack}
+>>>>>>> a77fa27bd1932898ac83a91c422a7cd9ae5d352b
                   disabled={loading}
                 >
                   Back to email
@@ -435,7 +479,14 @@ const Login: React.FC = () => {
                   type="button" 
                   variant="ghost" 
                   className="text-white/70"
+<<<<<<< HEAD
                   onClick={() => sendOTP(email)}
+=======
+                  onClick={() => {
+                    setLoading(true);
+                    generateOTP(email, false).finally(() => setLoading(false));
+                  }}
+>>>>>>> a77fa27bd1932898ac83a91c422a7cd9ae5d352b
                   disabled={loading}
                 >
                   Resend OTP
