@@ -7,7 +7,8 @@ import {
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
-  fetchSignInMethodsForEmail
+  fetchSignInMethodsForEmail,
+  UserCredential
 } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
@@ -170,7 +171,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const result = await signInWithEmailLink(auth, email, window.location.href);
       const user = result.user;
-      const isNewUser = result.additionalUserInfo?.isNewUser;
+      
+      // Check if this is a new user by querying Firestore instead of relying on additionalUserInfo
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+      const isNewUser = !userDoc.exists();
 
       if (isNewUser) {
         // Create new user document in Firestore
@@ -182,11 +187,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Fetch updated user data
-      const userDocRef = doc(db, "users", user.uid);
-      const userDoc = await getDoc(userDocRef);
+      const updatedUserDoc = await getDoc(userDocRef);
       
-      if (userDoc.exists()) {
-        setUserData(userDoc.data() as UserData);
+      if (updatedUserDoc.exists()) {
+        setUserData(updatedUserDoc.data() as UserData);
       }
 
       toast({

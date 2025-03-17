@@ -13,6 +13,13 @@ interface MiningContextProps {
   lastMined: Date | null;
   nextMineTime: Date | null;
   watchedAds: number;
+  timeRemaining: number;
+  miningActive: boolean;
+  miningComplete: boolean;
+  progress: number;
+  adsWatched: number;
+  totalAdsRequired: number;
+  collectMining: () => void;
   startMining: () => void;
   stopMining: () => void;
   watchAd: () => void;
@@ -29,7 +36,14 @@ export const MiningProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [lastMined, setLastMined] = useState<Date | null>(null);
   const [nextMineTime, setNextMineTime] = useState<Date | null>(null);
   const [canMine, setCanMine] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [miningActive, setMiningActive] = useState(false);
+  const [miningComplete, setMiningComplete] = useState(false);
+  const [progress, setProgress] = useState(0);
   const { toast } = useToast();
+  
+  // Define constants
+  const totalAdsRequired = 2;
 
   // Initialize mining state from user data
   useEffect(() => {
@@ -49,13 +63,68 @@ export const MiningProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // Check if can mine
         const now = new Date();
         setCanMine(now >= nextTime);
+        
+        // Calculate time remaining for countdown
+        if (now < nextTime) {
+          const remaining = Math.floor((nextTime.getTime() - now.getTime()) / 1000);
+          setTimeRemaining(remaining);
+        } else {
+          setTimeRemaining(0);
+        }
       } else {
         // If never mined before, can mine immediately
         setCanMine(true);
         setNextMineTime(null);
+        setTimeRemaining(0);
       }
     }
   }, [userData]);
+  
+  // Update timer countdown every second
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    
+    if (timeRemaining > 0) {
+      timer = setInterval(() => {
+        setTimeRemaining(prev => {
+          if (prev <= 1) {
+            setCanMine(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [timeRemaining]);
+
+  // Update mining progress while mining is active
+  useEffect(() => {
+    let progressTimer: NodeJS.Timeout | null = null;
+    
+    if (miningActive && !miningComplete) {
+      setProgress(0);
+      progressTimer = setInterval(() => {
+        setProgress(prev => {
+          const newProgress = prev + 1;
+          if (newProgress >= 100) {
+            setMiningComplete(true);
+            setMiningActive(false);
+            clearInterval(progressTimer!);
+            return 100;
+          }
+          return newProgress;
+        });
+      }, 30); // 3 seconds total
+    }
+    
+    return () => {
+      if (progressTimer) clearInterval(progressTimer);
+    };
+  }, [miningActive, miningComplete]);
 
   // Update Firebase when coins change
   useEffect(() => {
@@ -70,7 +139,7 @@ export const MiningProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     updateCoins();
-  }, [coins, user, userData]);
+  }, [coins, user, userData, updateUserData]);
 
   // Watch ad functionality
   const watchAd = () => {
@@ -79,7 +148,7 @@ export const MiningProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setWatchedAds((prev) => {
       const newCount = prev + 1;
       
-      if (newCount >= 2) {
+      if (newCount >= totalAdsRequired) {
         setCanMine(true);
         toast({
           title: "Mining Unlocked!",
@@ -88,7 +157,7 @@ export const MiningProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } else {
         toast({
           title: "Ad Watched",
-          description: `Watch ${2 - newCount} more ad to unlock mining.`,
+          description: `Watch ${totalAdsRequired - newCount} more ad to unlock mining.`,
         });
       }
       
@@ -112,10 +181,10 @@ export const MiningProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return;
       }
       
-      if (watchedAds < 2) {
+      if (watchedAds < totalAdsRequired) {
         toast({
           title: "Watch Ads First",
-          description: `Watch ${2 - watchedAds} more ads to start mining.`,
+          description: `Watch ${totalAdsRequired - watchedAds} more ads to start mining.`,
           variant: "destructive"
         });
         return;
@@ -123,14 +192,23 @@ export const MiningProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
     
     setIsMining(true);
+    setMiningActive(true);
+    setMiningComplete(false);
     
-    // Simulate mining process
-    setTimeout(async () => {
+    // Mining is handled by the useEffect above that updates progress
+  };
+
+  // Collect mining rewards
+  const collectMining = async () => {
+    if (miningComplete) {
       const newCoins = coins + miningRate;
       setCoins(newCoins);
       setIsMining(false);
+      setMiningActive(false);
+      setMiningComplete(false);
       setCanMine(false);
       setWatchedAds(0);
+      setProgress(0);
       
       const now = new Date();
       setLastMined(now);
@@ -138,6 +216,7 @@ export const MiningProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const nextTime = new Date(now);
       nextTime.setHours(nextTime.getHours() + 12);
       setNextMineTime(nextTime);
+      setTimeRemaining(12 * 60 * 60); // 12 hours in seconds
       
       // Update user data in Firebase
       if (user) {
@@ -160,12 +239,14 @@ export const MiningProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           });
         }
       }
-    }, 3000); // 3 second simulated mining time
+    }
   };
 
   // Stop mining
   const stopMining = () => {
     setIsMining(false);
+    setMiningActive(false);
+    setProgress(0);
   };
 
   return (
@@ -178,6 +259,13 @@ export const MiningProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         lastMined,
         nextMineTime,
         watchedAds,
+        timeRemaining,
+        miningActive,
+        miningComplete,
+        progress,
+        adsWatched: watchedAds,
+        totalAdsRequired,
+        collectMining,
         startMining,
         stopMining,
         watchAd,
