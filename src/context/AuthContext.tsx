@@ -4,11 +4,10 @@ import {
   User,
   onAuthStateChanged,
   signOut as firebaseSignOut,
-  sendSignInLinkToEmail,
-  isSignInWithEmailLink,
-  signInWithEmailLink,
-  fetchSignInMethodsForEmail,
-  UserCredential
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  fetchSignInMethodsForEmail
 } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
@@ -30,8 +29,8 @@ type AuthContextType = {
   user: User | null;
   userData: UserData | null;
   loading: boolean;
-  sendLoginLink: (email: string, isRegistration: boolean) => Promise<boolean>;
-  completeSignIn: (email: string) => Promise<boolean>;
+  generateOTP: (email: string, isRegistration: boolean) => Promise<boolean>;
+  verifyOTP: (email: string, otp: string, isRegistration: boolean) => Promise<boolean>;
   signOut: () => Promise<void>;
   updateUserData: (data: Partial<UserData>) => Promise<void>;
 };
@@ -44,6 +43,9 @@ const defaultUserData: UserData = {
   level: 1,
   rank: "Bronze"
 };
+
+// Store OTPs temporarily in memory (in a real app, you might use a more secure method)
+const otpStore: Record<string, { otp: string; isRegistration: boolean; timestamp: number }> = {};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -81,40 +83,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  // Check for email link sign-in when app loads
-  useEffect(() => {
-    const completeSignInWithEmailLink = async () => {
-      if (isSignInWithEmailLink(auth, window.location.href)) {
-        let email = localStorage.getItem("emailForSignIn");
-        
-        if (!email) {
-          // User opened link on a different device, ask for email
-          email = window.prompt("Please provide your email for confirmation");
-        }
-        
-        if (email) {
-          try {
-            await completeSignIn(email);
-            localStorage.removeItem("emailForSignIn");
-          } catch (error) {
-            console.error("Error signing in with email link:", error);
-            toast({
-              title: "Authentication Error",
-              description: "Failed to complete authentication. Please try again.",
-              variant: "destructive"
-            });
-          }
-        }
-      }
-    };
-
-    if (!loading && !user) {
-      completeSignInWithEmailLink();
-    }
-  }, [loading, user]);
-
-  // Send email link for authentication
-  const sendLoginLink = async (email: string, isRegistration: boolean): Promise<boolean> => {
+  // Generate a 6-digit OTP
+  const generateOTP = async (email: string, isRegistration: boolean): Promise<boolean> => {
     try {
       // Check if email already exists
       const methods = await fetchSignInMethodsForEmail(auth, email);
@@ -137,75 +107,117 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
 
-      // Configure action code settings
-      const actionCodeSettings = {
-        url: window.location.origin + '/verify',
-        handleCodeInApp: true,
+      // Generate a 6-digit OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Store OTP in memory (with 10-minute expiration)
+      otpStore[email] = {
+        otp,
+        isRegistration,
+        timestamp: Date.now() + 10 * 60 * 1000 // 10 minutes expiration
       };
-
-      // Send sign-in link to email
-      await sendSignInLinkToEmail(auth, email, actionCodeSettings);
       
-      // Save email to localStorage to use it later
-      localStorage.setItem("emailForSignIn", email);
-      
+      // In a real app, you would send an email with the OTP
+      // For demo purposes, we'll show it in a toast
       toast({
-        title: "Verification email sent",
-        description: "Please check your email to complete the authentication process.",
+        title: "OTP Generated",
+        description: `Your OTP is: ${otp} (In a real app, this would be sent to your email)`,
       });
       
       return true;
     } catch (error) {
-      console.error("Error sending email link:", error);
+      console.error("Error generating OTP:", error);
       toast({
-        title: "Authentication Error",
-        description: "Failed to send verification email. Please try again.",
+        title: "Error",
+        description: "Failed to generate OTP. Please try again.",
         variant: "destructive"
       });
       return false;
     }
   };
 
-  // Complete sign-in with email link
-  const completeSignIn = async (email: string): Promise<boolean> => {
+  // Verify OTP and sign in or register user
+  const verifyOTP = async (email: string, otp: string, isRegistration: boolean): Promise<boolean> => {
     try {
-      const result = await signInWithEmailLink(auth, email, window.location.href);
-      const user = result.user;
+      const storedData = otpStore[email];
       
-      // Check if this is a new user by querying Firestore instead of relying on additionalUserInfo
-      const userDocRef = doc(db, "users", user.uid);
-      const userDoc = await getDoc(userDocRef);
-      const isNewUser = !userDoc.exists();
-
-      if (isNewUser) {
-        // Create new user document in Firestore
-        await setDoc(doc(db, "users", user.uid), {
-          ...defaultUserData,
-          email: user.email,
-          displayName: user.displayName || email.split('@')[0],
+      // Check if OTP exists and hasn't expired
+      if (!storedData || Date.now() > storedData.timestamp) {
+        toast({
+          title: "OTP Expired",
+          description: "Your OTP has expired. Please request a new one.",
+          variant: "destructive"
         });
+        return false;
       }
 
-      // Fetch updated user data
-      const updatedUserDoc = await getDoc(userDocRef);
+      // Check if OTP matches
+      if (storedData.otp !== otp) {
+        toast({
+          title: "Invalid OTP",
+          description: "The OTP you entered is incorrect. Please try again.",
+          variant: "destructive"
+        });
+        return false;
+      }
+
+      // OTP is valid, proceed with sign in or registration
+      let userCredential;
       
-      if (updatedUserDoc.exists()) {
-        setUserData(updatedUserDoc.data() as UserData);
+      if (isRegistration) {
+        // Register new user
+        userCredential = await createUserWithEmailAndPassword(auth, email, `password_${Math.random().toString(36)}`);
+        
+        // Create user document in Firestore
+        await setDoc(doc(db, "users", userCredential.user.uid), {
+          ...defaultUserData,
+          email: email,
+          displayName: email.split('@')[0],
+        });
+        
+        // Send email verification (optional in OTP flow)
+        await sendEmailVerification(userCredential.user);
+      } else {
+        // Sign in existing user (using email/password auth behind the scenes)
+        // This requires that we set a password during registration
+        try {
+          userCredential = await signInWithEmailAndPassword(auth, email, `password_${Math.random().toString(36)}`);
+        } catch (error) {
+          // Handle case where user was created with the old method
+          console.error("Sign in error:", error);
+          toast({
+            title: "Authentication Error",
+            description: "Please use the 'Forgot Password' option to reset your password.",
+            variant: "destructive"
+          });
+          return false;
+        }
+      }
+
+      // Clear OTP from store after successful verification
+      delete otpStore[email];
+
+      // Fetch user data
+      const userDocRef = doc(db, "users", userCredential.user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (userDoc.exists()) {
+        setUserData(userDoc.data() as UserData);
       }
 
       toast({
         title: "Authentication Successful",
-        description: isNewUser ? "Your account has been created successfully!" : "You have been logged in successfully!",
+        description: isRegistration ? "Your account has been created successfully!" : "You have been logged in successfully!",
       });
 
       // Redirect to home page
       navigate("/");
       return true;
     } catch (error) {
-      console.error("Error completing sign-in:", error);
+      console.error("Error verifying OTP:", error);
       toast({
         title: "Authentication Error",
-        description: "Failed to complete authentication. Please try again.",
+        description: "Failed to authenticate. Please try again.",
         variant: "destructive"
       });
       return false;
@@ -255,8 +267,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     userData,
     loading,
-    sendLoginLink,
-    completeSignIn,
+    generateOTP,
+    verifyOTP,
     signOut,
     updateUserData,
   };

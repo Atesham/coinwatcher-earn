@@ -12,6 +12,9 @@ const Verify: React.FC = () => {
     // If user is authenticated after the auth check, redirect to home page
     if (!loading && user) {
       navigate("/");
+    } else if (!loading && !user) {
+      // If not authenticated and not loading, redirect to login
+      navigate("/login");
     }
   }, [user, loading, navigate]);
 
@@ -22,9 +25,9 @@ const Verify: React.FC = () => {
           <div className="animate-spin">
             <Loader className="h-12 w-12 text-app-blue" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Verifying your login...</h1>
+          <h1 className="text-2xl font-bold text-white">Verifying your authentication...</h1>
           <p className="text-white/70">
-            Please wait while we verify your email link. You'll be redirected automatically.
+            Please wait while we verify your authentication. You'll be redirected automatically.
           </p>
         </div>
       </div>

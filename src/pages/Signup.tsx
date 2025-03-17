@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Mail } from 'lucide-react';
+import { Mail, KeyRound } from 'lucide-react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,28 +16,63 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
 
-const signupSchema = z.object({
+const emailSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
 });
 
-type SignupFormValues = z.infer<typeof signupSchema>;
+const otpSchema = z.object({
+  otp: z.string().length(6, { message: "OTP must be 6 digits" }),
+});
+
+type EmailFormValues = z.infer<typeof emailSchema>;
+type OTPFormValues = z.infer<typeof otpSchema>;
 
 const Signup: React.FC = () => {
-  const { sendLoginLink } = useAuth();
+  const { generateOTP, verifyOTP } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [showOTPInput, setShowOTPInput] = useState(false);
+  const [email, setEmail] = useState("");
 
-  const form = useForm<SignupFormValues>({
-    resolver: zodResolver(signupSchema),
+  const emailForm = useForm<EmailFormValues>({
+    resolver: zodResolver(emailSchema),
     defaultValues: {
       email: "",
     },
   });
 
-  const onSubmit = async (data: SignupFormValues) => {
+  const otpForm = useForm<OTPFormValues>({
+    resolver: zodResolver(otpSchema),
+    defaultValues: {
+      otp: "",
+    },
+  });
+
+  const onSubmitEmail = async (data: EmailFormValues) => {
     setLoading(true);
-    await sendLoginLink(data.email, true);
+    const result = await generateOTP(data.email, true);
     setLoading(false);
+    
+    if (result) {
+      setEmail(data.email);
+      setShowOTPInput(true);
+    }
+  };
+
+  const onSubmitOTP = async (data: OTPFormValues) => {
+    setLoading(true);
+    await verifyOTP(email, data.otp, true);
+    setLoading(false);
+  };
+
+  const goBack = () => {
+    setShowOTPInput(false);
+    otpForm.reset();
   };
 
   return (
@@ -48,38 +83,106 @@ const Signup: React.FC = () => {
       </div>
 
       <div className="glass-card rounded-xl p-6 w-full max-w-md mx-auto">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-white">Email Address</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 h-5 w-5" />
-                      <Input
-                        placeholder="your@email.com"
-                        className="pl-10 bg-app-card border-white/10"
-                        {...field}
-                      />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        {!showOTPInput ? (
+          <Form {...emailForm}>
+            <form onSubmit={emailForm.handleSubmit(onSubmitEmail)} className="space-y-4">
+              <FormField
+                control={emailForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-white">Email Address</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 h-5 w-5" />
+                        <Input
+                          placeholder="your@email.com"
+                          className="pl-10 bg-app-card border-white/10"
+                          {...field}
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <Button 
-              type="submit" 
-              className="w-full bg-app-blue hover:bg-app-blue/90"
-              disabled={loading}
-            >
-              {loading ? "Creating Account..." : "Sign Up with Email Link"}
-            </Button>
-          </form>
-        </Form>
+              <Button 
+                type="submit" 
+                className="w-full bg-app-blue hover:bg-app-blue/90"
+                disabled={loading}
+              >
+                {loading ? "Sending OTP..." : "Get OTP"}
+              </Button>
+            </form>
+          </Form>
+        ) : (
+          <Form {...otpForm}>
+            <form onSubmit={otpForm.handleSubmit(onSubmitOTP)} className="space-y-4">
+              <div className="text-center mb-4">
+                <p className="text-white mb-1">Enter the 6-digit OTP sent to</p>
+                <p className="text-app-blue font-semibold">{email}</p>
+              </div>
+
+              <FormField
+                control={otpForm.control}
+                name="otp"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <div className="flex justify-center">
+                        <InputOTP maxLength={6} {...field}>
+                          <InputOTPGroup>
+                            <InputOTPSlot index={0} className="bg-app-card border-white/10 text-white" />
+                            <InputOTPSlot index={1} className="bg-app-card border-white/10 text-white" />
+                            <InputOTPSlot index={2} className="bg-app-card border-white/10 text-white" />
+                            <InputOTPSlot index={3} className="bg-app-card border-white/10 text-white" />
+                            <InputOTPSlot index={4} className="bg-app-card border-white/10 text-white" />
+                            <InputOTPSlot index={5} className="bg-app-card border-white/10 text-white" />
+                          </InputOTPGroup>
+                        </InputOTP>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex flex-col space-y-2">
+                <Button 
+                  type="submit" 
+                  className="w-full bg-app-blue hover:bg-app-blue/90"
+                  disabled={loading}
+                >
+                  {loading ? "Creating Account..." : "Create Account"}
+                </Button>
+                
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  className="text-white/70"
+                  onClick={goBack}
+                  disabled={loading}
+                >
+                  Back to email
+                </Button>
+                
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  className="text-white/70"
+                  onClick={() => {
+                    setLoading(true);
+                    generateOTP(email, true).finally(() => setLoading(false));
+                  }}
+                  disabled={loading}
+                >
+                  Resend OTP
+                </Button>
+              </div>
+            </form>
+          </Form>
+        )}
 
         <div className="mt-6 text-center text-white/70">
           <span>Already have an account? </span>
