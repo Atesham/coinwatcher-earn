@@ -38,7 +38,7 @@ export const clearOTP = (email: string): void => {
 // Function to send OTP email
 export const sendOTPEmail = async (email: string, otp: string): Promise<boolean> => {
   try {
-    // For local development, log the OTP to console
+    // For local development, log the OTP to console (but don't show it in the UI)
     console.log(`[DEV] OTP for ${email}: ${otp}`);
     
     // Call the Firebase Function to send the actual email

@@ -31,7 +31,7 @@ const createEmailTemplate = (otp: string) => {
 };
 
 export const sendOTP = functions.https.onCall(async (data, context) => {
-  // Properly access data from the callable function
+  // Properly access data with type assertion
   // First cast to unknown then to the expected type
   const { email, otp } = data as unknown as { email: string; otp: string };
 
