@@ -31,7 +31,8 @@ const createEmailTemplate = (otp: string) => {
 };
 
 export const sendOTP = functions.https.onCall(async (data, context) => {
-  const { email, otp } = data;
+  // Properly access data from the callable function
+  const { email, otp } = data as { email: string; otp: string };
 
   if (!email || !otp) {
     throw new functions.https.HttpsError(
