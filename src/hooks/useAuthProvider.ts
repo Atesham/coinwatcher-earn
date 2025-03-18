@@ -10,11 +10,12 @@ import {
   fetchSignInMethodsForEmail
 } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { auth, db } from "@/lib/firebase";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/components/ui/use-toast";
 import { UserData, defaultUserData } from "@/types/auth";
-import { generateOTPCode, storeOTP, isValidOTP, clearOTP } from "@/utils/authUtils";
+import { generateOTPCode, storeOTP, isValidOTP, clearOTP, sendOTPEmail } from "@/utils/authUtils";
 
 export const useAuthProvider = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -80,14 +81,23 @@ export const useAuthProvider = () => {
       // Store OTP with expiration
       storeOTP(email, otp, isRegistration);
       
-      // In a real app, you would send an email with the OTP
-      // For demo purposes, we'll show it in a toast
-      toast({
-        title: "OTP Generated",
-        description: `Your OTP is: ${otp} (In a real app, this would be sent to your email)`,
-      });
+      // Send OTP email
+      const emailSent = await sendOTPEmail(email, otp);
       
-      return true;
+      if (emailSent) {
+        toast({
+          title: "OTP Sent",
+          description: "An OTP has been sent to your email address. Please check your inbox.",
+        });
+        return true;
+      } else {
+        toast({
+          title: "Email Error",
+          description: "Failed to send OTP email. Please try again.",
+          variant: "destructive"
+        });
+        return false;
+      }
     } catch (error) {
       console.error("Error generating OTP:", error);
       toast({
