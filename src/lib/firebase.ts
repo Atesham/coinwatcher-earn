@@ -2,7 +2,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { getFunctions } from "firebase/functions";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAtuqroUbp9TpqjNvbl99eDaihRMenhEqw",
@@ -18,5 +18,11 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app);
+
+// Connect to Firebase emulators in development
+if (import.meta.env.DEV) {
+  // Uncomment this when running local emulators
+  // connectFunctionsEmulator(functions, "localhost", 5001);
+}
 
 export default app;
