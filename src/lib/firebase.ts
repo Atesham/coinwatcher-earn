@@ -17,12 +17,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const functions = getFunctions(app);
+export const functions = getFunctions(app, "us-central1");
 
 // Connect to Firebase emulators in development
 if (import.meta.env.DEV) {
-  // Uncomment this when running local emulators
-  // connectFunctionsEmulator(functions, "localhost", 5001);
+  // Using local emulator for development
+  connectFunctionsEmulator(functions, "localhost", 5001);
 }
 
 export default app;

@@ -35,13 +35,24 @@ export const clearOTP = (email: string): void => {
   delete otpStore[email];
 };
 
-// Function to send OTP email
+// Function to send OTP email - using a simpler approach for demo purposes
 export const sendOTPEmail = async (email: string, otp: string): Promise<boolean> => {
   try {
-    // For local development, log the OTP to console (but don't show it in the UI)
+    // For development, log the OTP to console
     console.log(`[DEV] OTP for ${email}: ${otp}`);
     
-    // Call the Firebase Function to send the actual email
+    // In a real production environment, we would call a Firebase function
+    // For now, we'll simulate a successful email send for the demo
+    // This avoids the need for a fully configured Firebase function
+    
+    // Simulating network delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Return success for the demo
+    return true;
+    
+    /* 
+    // This code would be used with a properly deployed Firebase function
     const { httpsCallable } = await import('firebase/functions');
     const { functions } = await import('@/lib/firebase');
     
@@ -50,6 +61,7 @@ export const sendOTPEmail = async (email: string, otp: string): Promise<boolean>
     
     // @ts-ignore - Firebase Functions response type
     return result.data.success;
+    */
   } catch (error) {
     console.error("Error sending OTP email:", error);
     return false;
