@@ -8,8 +8,8 @@ const nodemailer = require("nodemailer");
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.EMAIL_USER || "your-email@gmail.com",
-    pass: process.env.EMAIL_PASSWORD || "your-app-password" // Use app password for Gmail
+    user: process.env.EMAIL_USER || "ateshamali0@gmail.com",
+    pass: process.env.EMAIL_PASSWORD || "Atesham@123" // Use app password for Gmail
   },
 });
 
@@ -41,7 +41,7 @@ exports.sendOTP = functions.https.onCall(async (data, context) => {
   }
 
   const mailOptions = {
-    from: process.env.EMAIL_USER || "your-email@gmail.com",
+    from: process.env.EMAIL_USER || "ateshamali0@gmail.com",
     to: email,
     subject: "Your CoinTap Verification Code",
     html: createEmailTemplate(otp),
