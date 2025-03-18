@@ -1,7 +1,7 @@
 
 // Firebase Cloud Function for sending OTP via email
-const functions = require("firebase-functions");
-const nodemailer = require("nodemailer");
+import * as functions from "firebase-functions";
+import * as nodemailer from "nodemailer";
 
 // Create a transporter using environment variables
 // NOTE: For production, set these in Firebase Functions environment variables
@@ -14,7 +14,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // Format OTP email with better styling
-const createEmailTemplate = (otp) => {
+const createEmailTemplate = (otp: string) => {
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
       <h2 style="color: #333; text-align: center;">Your One-Time Password</h2>
@@ -30,8 +30,10 @@ const createEmailTemplate = (otp) => {
   `;
 };
 
-exports.sendOTP = functions.https.onCall(async (data, context) => {
-  const { email, otp } = data;
+export const sendOTP = functions.https.onCall(async (data, context) => {
+  // Properly access data from the callable function
+  // First cast to unknown then to the expected type
+  const { email, otp } = data as unknown as { email: string; otp: string };
 
   if (!email || !otp) {
     throw new functions.https.HttpsError(

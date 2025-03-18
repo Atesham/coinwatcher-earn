@@ -41,16 +41,15 @@ export const sendOTPEmail = async (email: string, otp: string): Promise<boolean>
     // For local development, log the OTP to console
     console.log(`[DEV] OTP for ${email}: ${otp}`);
     
-    // In production, we would call the Firebase Function
-    // Uncomment the following code when deployed:
-    /*
-    const sendOTPFunction = firebase.functions().httpsCallable('sendOTP');
-    const result = await sendOTPFunction({ email, otp });
-    return result.data.success;
-    */
+    // Call the Firebase Function to send the actual email
+    const { httpsCallable } = await import('firebase/functions');
+    const { functions } = await import('@/lib/firebase');
     
-    // For now, just return true to simulate success
-    return true;
+    const sendOTPFunction = httpsCallable(functions, 'sendOTP');
+    const result = await sendOTPFunction({ email, otp });
+    
+    // @ts-ignore - Firebase Functions response type
+    return result.data.success;
   } catch (error) {
     console.error("Error sending OTP email:", error);
     return false;
