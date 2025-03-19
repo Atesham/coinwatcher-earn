@@ -1,33 +1,19 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Mail } from "lucide-react";
-import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
-import { db } from "@/lib/firebase";
-import { doc, setDoc, getDocs, query, where, collection } from "firebase/firestore";
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Form } from '@/components/ui/form';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/context/AuthContext';
+import { Loader } from 'lucide-react';
 
 const emailSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address" }),
+  email: z.string().email('Invalid email address'),
 });
 
 const otpSchema = z.object({
-  otp: z.string().length(6, { message: "OTP must be 6 digits" }),
+  otp: z.string().length(6, 'OTP must be 6 digits'),
 });
 
 type EmailFormValues = z.infer<typeof emailSchema>;
@@ -38,7 +24,7 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showOTPInput, setShowOTPInput] = useState(false);
   const [email, setEmail] = useState("");
-  const [generatedOTP, setGeneratedOTP] = useState("");
+  const { generateOTP, verifyOTP } = useAuth();
 
   const emailForm = useForm<EmailFormValues>({
     resolver: zodResolver(emailSchema),
@@ -50,49 +36,16 @@ const Login: React.FC = () => {
     defaultValues: { otp: "" },
   });
 
-  const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
-
-  const checkEmailExists = async (email: string) => {
-    const usersRef = collection(db, "users");
-    const q = query(usersRef, where("email", "==", email));
-    const querySnapshot = await getDocs(q);
-    return !querySnapshot.empty;
-  };
-
-  const sendOTP = async (email: string) => {
-    const otp = generateOTP();
-    setGeneratedOTP(otp);
-
-    try {
-      await setDoc(doc(db, "otps", email), { otp, timestamp: new Date().toISOString() });
-      alert(`OTP sent to ${email}`);
-    } catch (error) {
-      console.error("Error sending OTP:", error);
-      alert("Failed to send OTP. Try again.");
-    }
-  };
-
-  const onSubmitEmail = async (data: { email: string }) => {
+  const onSubmitEmail = async (data: EmailFormValues) => {
     setLoading(true);
-    const email = data.email.trim();
-    setEmail(email);
-
     try {
-      const emailExists = await checkEmailExists(email);
-
-      if (!emailExists) {
-        if (window.confirm("This email is not registered. Do you want to sign up?")) {
-          navigate("/signup");
-        }
-        setLoading(false);
-        return;
+      const success = await generateOTP(data.email, false);
+      if (success) {
+        setEmail(data.email);
+        setShowOTPInput(true);
       }
-
-      await sendOTP(email);
-      setShowOTPInput(true);
     } catch (error) {
-      console.error("Firebase Error:", error);
-      alert("Error checking email. Try again.");
+      console.error("Error:", error);
     } finally {
       setLoading(false);
     }
@@ -101,18 +54,10 @@ const Login: React.FC = () => {
   const onSubmitOTP = async (data: OTPFormValues) => {
     setLoading(true);
     try {
-      const otpDoc = await getDocs(query(collection(db, "otps"), where("otp", "==", generatedOTP)));
-      const isValidOTP = !otpDoc.empty;
-
-      if (isValidOTP) {
-        alert("Login Successful!");
-        navigate("/dashboard");
-      } else {
-        alert("Invalid OTP. Try again.");
-      }
+      await verifyOTP(email, data.otp, false);
+      navigate("/dashboard");
     } catch (error) {
-      console.error("OTP Verification Error:", error);
-      alert("Error verifying OTP. Try again.");
+      console.error("Error:", error);
     } finally {
       setLoading(false);
     }
@@ -125,99 +70,53 @@ const Login: React.FC = () => {
         <p className="text-white/70">Login to continue mining coins</p>
       </div>
 
-      <div className="glass-card rounded-xl p-6 w-full max-w-md mx-auto">
+      <div className="glass-card rounded-xl p-8 w-full max-w-md mx-auto">
         {!showOTPInput ? (
           <Form {...emailForm}>
-            <form onSubmit={emailForm.handleSubmit(onSubmitEmail)} className="space-y-4">
-              <FormField
-                control={emailForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-white">Email Address</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 h-5 w-5" />
-                        <Input
-                          placeholder="your@email.com"
-                          className="pl-10 bg-app-card border-white/10"
-                          {...field}
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
+            <form onSubmit={emailForm.handleSubmit(onSubmitEmail)} className="space-y-6">
+              <div>
+                <input
+                  {...emailForm.register("email")}
+                  type="email"
+                  placeholder="Enter your email"
+                  className="w-full p-3 rounded bg-white/10 text-white"
+                />
+              </div>
               <Button 
                 type="submit" 
                 className="w-full bg-app-blue hover:bg-app-blue/90"
                 disabled={loading}
               >
-                {loading ? "Sending OTP..." : "Get OTP"}
+                {loading ? <Loader className="animate-spin" /> : "Continue with Email"}
               </Button>
             </form>
           </Form>
         ) : (
           <Form {...otpForm}>
-            <form onSubmit={otpForm.handleSubmit(onSubmitOTP)} className="space-y-4">
-              <div className="text-center mb-4">
-                <p className="text-white mb-1">Enter the 6-digit OTP sent to</p>
-                <p className="text-app-blue font-semibold">{email}</p>
+            <form onSubmit={otpForm.handleSubmit(onSubmitOTP)} className="space-y-6">
+              <div>
+                <input
+                  {...otpForm.register("otp")}
+                  type="text"
+                  placeholder="Enter OTP"
+                  className="w-full p-3 rounded bg-white/10 text-white"
+                />
               </div>
-
-              <FormField
-                control={otpForm.control}
-                name="otp"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <div className="flex justify-center">
-                        <InputOTP maxLength={6} {...field}>
-                          <InputOTPGroup>
-                            {[...Array(6)].map((_, i) => (
-                              <InputOTPSlot key={i} index={i} className="bg-app-card border-white/10 text-white" />
-                            ))}
-                          </InputOTPGroup>
-                        </InputOTP>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               <div className="flex flex-col space-y-2">
                 <Button 
                   type="submit" 
                   className="w-full bg-app-blue hover:bg-app-blue/90"
                   disabled={loading}
                 >
-                  {loading ? "Verifying OTP..." : "Login"}
+                  {loading ? <Loader className="animate-spin" /> : "Verify OTP"}
                 </Button>
-                
                 <Button 
                   type="button" 
                   variant="ghost" 
-                  className="text-white/70"
                   onClick={() => setShowOTPInput(false)}
-                  disabled={loading}
+                  className="text-white/70"
                 >
                   Back to email
-                </Button>
-                
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  className="text-white/70"
-                  onClick={() => {
-                    setLoading(true);
-                    sendOTP(email).finally(() => setLoading(false));
-                  }}
-                  disabled={loading}
-                >
-                  Resend OTP
                 </Button>
               </div>
             </form>
@@ -230,10 +129,6 @@ const Login: React.FC = () => {
             Sign up
           </Link>
         </div>
-      </div>
-
-      <div className="mt-8 text-center text-white/40 text-sm">
-        CoinTap v1.0.0
       </div>
     </div>
   );
