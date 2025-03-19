@@ -1,13 +1,11 @@
-
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Mail } from 'lucide-react';
-import { z } from 'zod';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Mail } from "lucide-react";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Form,
   FormControl,
@@ -21,6 +19,8 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import { db } from "@/lib/firebase";
+import { doc, setDoc, getDocs, query, where, collection } from "firebase/firestore";
 
 const emailSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -34,45 +34,88 @@ type EmailFormValues = z.infer<typeof emailSchema>;
 type OTPFormValues = z.infer<typeof otpSchema>;
 
 const Login: React.FC = () => {
-  const { generateOTP, verifyOTP } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [showOTPInput, setShowOTPInput] = useState(false);
   const [email, setEmail] = useState("");
+  const [generatedOTP, setGeneratedOTP] = useState("");
 
   const emailForm = useForm<EmailFormValues>({
     resolver: zodResolver(emailSchema),
-    defaultValues: {
-      email: "",
-    },
+    defaultValues: { email: "" },
   });
 
   const otpForm = useForm<OTPFormValues>({
     resolver: zodResolver(otpSchema),
-    defaultValues: {
-      otp: "",
-    },
+    defaultValues: { otp: "" },
   });
 
-  const onSubmitEmail = async (data: EmailFormValues) => {
+  const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+  const checkEmailExists = async (email: string) => {
+    const usersRef = collection(db, "users");
+    const q = query(usersRef, where("email", "==", email));
+    const querySnapshot = await getDocs(q);
+    return !querySnapshot.empty;
+  };
+
+  const sendOTP = async (email: string) => {
+    const otp = generateOTP();
+    setGeneratedOTP(otp);
+
+    try {
+      await setDoc(doc(db, "otps", email), { otp, timestamp: new Date().toISOString() });
+      alert(`OTP sent to ${email}`);
+    } catch (error) {
+      console.error("Error sending OTP:", error);
+      alert("Failed to send OTP. Try again.");
+    }
+  };
+
+  const onSubmitEmail = async (data: { email: string }) => {
     setLoading(true);
-    const result = await generateOTP(data.email, false);
-    setLoading(false);
-    
-    if (result) {
-      setEmail(data.email);
+    const email = data.email.trim();
+    setEmail(email);
+
+    try {
+      const emailExists = await checkEmailExists(email);
+
+      if (!emailExists) {
+        if (window.confirm("This email is not registered. Do you want to sign up?")) {
+          navigate("/signup");
+        }
+        setLoading(false);
+        return;
+      }
+
+      await sendOTP(email);
       setShowOTPInput(true);
+    } catch (error) {
+      console.error("Firebase Error:", error);
+      alert("Error checking email. Try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
   const onSubmitOTP = async (data: OTPFormValues) => {
     setLoading(true);
-    await verifyOTP(email, data.otp, false);
-    setLoading(false);
-  };
+    try {
+      const otpDoc = await getDocs(query(collection(db, "otps"), where("otp", "==", generatedOTP)));
+      const isValidOTP = !otpDoc.empty;
 
-  const goBack = () => {
-    setShowOTPInput(false);
-    otpForm.reset();
+      if (isValidOTP) {
+        alert("Login Successful!");
+        navigate("/dashboard");
+      } else {
+        alert("Invalid OTP. Try again.");
+      }
+    } catch (error) {
+      console.error("OTP Verification Error:", error);
+      alert("Error verifying OTP. Try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -133,12 +176,9 @@ const Login: React.FC = () => {
                       <div className="flex justify-center">
                         <InputOTP maxLength={6} {...field}>
                           <InputOTPGroup>
-                            <InputOTPSlot index={0} className="bg-app-card border-white/10 text-white" />
-                            <InputOTPSlot index={1} className="bg-app-card border-white/10 text-white" />
-                            <InputOTPSlot index={2} className="bg-app-card border-white/10 text-white" />
-                            <InputOTPSlot index={3} className="bg-app-card border-white/10 text-white" />
-                            <InputOTPSlot index={4} className="bg-app-card border-white/10 text-white" />
-                            <InputOTPSlot index={5} className="bg-app-card border-white/10 text-white" />
+                            {[...Array(6)].map((_, i) => (
+                              <InputOTPSlot key={i} index={i} className="bg-app-card border-white/10 text-white" />
+                            ))}
                           </InputOTPGroup>
                         </InputOTP>
                       </div>
@@ -154,14 +194,14 @@ const Login: React.FC = () => {
                   className="w-full bg-app-blue hover:bg-app-blue/90"
                   disabled={loading}
                 >
-                  {loading ? "Verifying..." : "Login"}
+                  {loading ? "Verifying OTP..." : "Login"}
                 </Button>
                 
                 <Button 
                   type="button" 
                   variant="ghost" 
                   className="text-white/70"
-                  onClick={goBack}
+                  onClick={() => setShowOTPInput(false)}
                   disabled={loading}
                 >
                   Back to email
@@ -173,7 +213,7 @@ const Login: React.FC = () => {
                   className="text-white/70"
                   onClick={() => {
                     setLoading(true);
-                    generateOTP(email, false).finally(() => setLoading(false));
+                    sendOTP(email).finally(() => setLoading(false));
                   }}
                   disabled={loading}
                 >

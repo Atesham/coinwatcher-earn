@@ -3,13 +3,15 @@
 import * as functions from "firebase-functions";
 import * as nodemailer from "nodemailer";
 
+
+
 // Create a transporter using environment variables
 // NOTE: For production, set these in Firebase Functions environment variables
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: process.env.EMAIL_USER || "ateshamali0@gmail.com",
-    pass: process.env.EMAIL_PASSWORD || "Atesham@123" // Use app password for Gmail
+    pass: process.env.EMAIL_PASSWORD || "ulun boig ldny neny" // Use app password for Gmail
   },
 });
 
@@ -31,9 +33,10 @@ const createEmailTemplate = (otp: string) => {
 };
 
 export const sendOTP = functions.https.onCall(async (data, context) => {
-  // Properly access data with type assertion
+  // Properly access data from the callable function
   // First cast to unknown then to the expected type
   const { email, otp } = data as unknown as { email: string; otp: string };
+
 
   if (!email || !otp) {
     throw new functions.https.HttpsError(
@@ -61,3 +64,5 @@ export const sendOTP = functions.https.onCall(async (data, context) => {
     );
   }
 });
+
+
